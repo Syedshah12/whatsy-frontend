@@ -1,11 +1,11 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { API_ROOT } from "../../config/api";
 
 export const billingApi = createApi({
   reducerPath: "billingApi",
 
   baseQuery: fetchBaseQuery({
-    baseUrl: `https://whatsy-backend-production.up.railway.app/api`,
-    // baseUrl: `http://localhost:3000/api`,
+    baseUrl: `${API_ROOT}/api`,
     credentials: "include",
   }),
 

@@ -1,11 +1,11 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { API_CAMPAIGN } from "../../config/api";
 
 export const campaignAnalyticsApi = createApi({
   reducerPath: "campaignAnalyticsApi",
 
   baseQuery: fetchBaseQuery({
-    baseUrl: `https://whatsy-backend-production.up.railway.app/api/campaign`,
-    // baseUrl: `http://localhost:3000/api/campaign`,
+    baseUrl: API_CAMPAIGN,
     credentials: "include",
     prepareHeaders: (headers) => {
       const token = localStorage.getItem("token");

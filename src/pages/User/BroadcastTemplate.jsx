@@ -1,404 +1,3 @@
-// import React, { useState, useEffect, useRef } from 'react';
-// import { 
-//   Layers, 
-//   UploadCloud, 
-//   FileSpreadsheet, 
-//   Play, 
-//   CheckCircle2, 
-//   XCircle, 
-//   Loader2, 
-//   Smartphone,
-//   Info,
-//   AlertCircle
-// } from 'lucide-react';
-// import { toast } from 'sonner';
-// // ✅ Use this — your existing shared socket
-// import { socket } from '../../socket';
-
-// // Clean connection directly into your features module slices
-// import { useGetTemplatesQuery, useSendBulkTemplateMutation } from '../../features/messages/messagesApi';
-
-// const BroadcastTemplate = () => {
-//   // Component Reactive State
-//   const [selectedTemplate, setSelectedTemplate] = useState(null);
-//   const [selectedFile, setSelectedFile] = useState(null);
-//   const [activeCampaign, setActiveCampaign] = useState(null);
-//   const fileInputRef = useRef(null);
-
-//   // Live Socket.io Progress Tracking State
-//   const [progressData, setProgressData] = useState({
-//     total: 0,
-//     sent: 0,
-//     failed: 0,
-//     percentage: 0
-//   });
-
-//   // 1. Real RTK Query Hook Invocation
-//   const { data: templatesResponse, isLoading: isTemplatesLoading } = useGetTemplatesQuery();
-//   const [sendBulkTemplate, { isLoading: isSubmitting }] = useSendBulkTemplateMutation();
-
-//   // Safeguard templates data arrays
-//   const templates = templatesResponse?.data || [];
-
-//   // Auto-select initial template configuration pattern once data updates loaded
-//   useEffect(() => {
-//     if (templates && templates.length > 0 && !selectedTemplate) {
-//       setSelectedTemplate(templates[0]);
-//     }
-//   }, [templates, selectedTemplate]);
-
-//   // 2. Real-time Socket.io Connection Setup
-// useEffect(() => {
-//   if (!activeCampaign) return;
-//   // ✅ Ensure socket is connected
-//   if (!socket.connected) {
-//     socket.connect();
-//   }
-//   // ✅ Use shared socket, don't create a new one
-//   const handleProgress = (data) => {
-//      console.log("bulk_progress received:", data);           // ← add this
-//     console.log("activeCampaign:", activeCampaign);         // ← add this
-//     console.log("match:", String(data.campaignId) === String(activeCampaign)); 
-//     if (data.campaignId === String(activeCampaign)) {
-//       const calculatedPercentage = data.total > 0 
-//         ? Math.round((data.sent / data.total) * 100) 
-//         : 0;
-
-//       setProgressData({
-//         total: data.total,
-//         sent: data.sent,
-//         failed: data.failed,
-//         percentage: calculatedPercentage
-//       });
-//  // ✅ Show per-message toast
-//     if (data.phone) {
-//       toast.success(`Template sent to +${data.phone}`);
-//     }
-//       if (data.sent + data.failed === data.total && data.total > 0) {
-//         toast.success("Broadcast campaign completed successfully!");
-//       }
-//     }
-//   };
-
-//   socket.on("bulk_progress", handleProgress);
-
-//   return () => {
-//     socket.off("bulk_progress", handleProgress); // ✅ clean up only this listener
-//   };
-// }, [activeCampaign]);
-
-//   // Handle Input Matrix Target Changes
-//   const handleFileChange = (e) => {
-//     const file = e.target.files[0];
-//     if (file && (file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
-//       setSelectedFile(file);
-//       toast.success("Workbook uploaded and mapped successfully!");
-//     } else {
-//       toast.error("Invalid format. Please upload a standard Excel workbook (.xlsx).");
-//     }
-//   };
-
-//   // Launch Payload Distribution Pipeline
-//   const handleLaunchCampaign = async () => {
-//     if (!selectedTemplate) return toast.error("Please select an active WhatsApp template.");
-//     if (!selectedFile) return toast.error("Please import an excel recipient configuration file.");
-
-//     try {
-//       // Execute unwrap directly against the authentic hook distribution layer
-//       const response = await sendBulkTemplate({
-//         file: selectedFile,
-//         templateName: selectedTemplate.name,
-//         langCode: selectedTemplate.language || "en_US"
-//       }).unwrap();
-
-//       if (response?.success) {
-//         toast.success(response.message || "Recipient matrix parsed! Initiating broadcast...");
-//         // Synchronize state with backend process tracking ID parameters
-//         setActiveCampaign(response.campaignId);
-//         setProgressData({ total: 0, sent: 0, failed: 0, percentage: 0 });
-//       }
-//     } catch (err) {
-//       console.error("Broadcast transmission payload failure context:", err);
-//       toast.error(err?.data?.error || err?.message || "An integration failure occurred distributing the broadcast.");
-//     }
-//   };
-
-//   return (
-//     <div className="flex h-screen w-full flex-col md:flex-row bg-[#f8f9fa] font-sans antialiased text-slate-700 overflow-hidden">
-      
-//       {/* LEFT COLUMN: TEMPLATE DICTIONARY */}
-//       <div className="w-full md:w-[380px] xl:w-[420px] bg-white border-r border-slate-200 flex flex-col h-1/2 md:h-full shrink-0">
-//         <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-//           <div className="flex items-center gap-2 text-[#04432e]">
-//             <Layers className="h-5 w-5" />
-//             <h1 className="text-sm font-bold tracking-tight text-slate-800">WhatsApp Templates</h1>
-//           </div>
-//           <p className="text-[11px] text-slate-400 mt-0.5">Select a Meta-approved structure to map variables against.</p>
-//         </div>
-
-//         {/* Scrollable Templates Deck */}
-//         <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-//           {isTemplatesLoading ? (
-//             <div className="flex h-32 flex-col items-center justify-center gap-2 text-slate-400">
-//               <Loader2 className="h-5 w-5 animate-spin text-[#04432e]" />
-//               <span className="text-xs">Fetching metadata layouts...</span>
-//             </div>
-//           ) : templates.length === 0 ? (
-//             <div className="text-center p-6 text-xs text-slate-400 italic">
-//               No integrated templates found on this account.
-//             </div>
-//           ) : (
-//             templates.map((template) => {
-//               const isSelected = selectedTemplate?.name === template.name;
-//               return (
-//                 <div
-//                   key={template.id || template.name}
-//                   onClick={() => setSelectedTemplate(template)}
-//                   className={`p-3 rounded-xl border cursor-pointer transition relative overflow-hidden ${
-//                     isSelected 
-//                       ? 'border-[#04432e] bg-emerald-50/20 ring-1 ring-[#04432e]' 
-//                       : 'border-slate-200 hover:bg-slate-50'
-//                   }`}
-//                 >
-//                   <div className="flex items-center justify-between mb-1.5">
-//                     <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
-//                       {template.category}
-//                     </span>
-//                     <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
-//                       {template.status}
-//                     </span>
-//                   </div>
-//                   <h3 className="text-xs font-semibold text-slate-800 truncate mb-1">{template.name}</h3>
-//                   <div className="flex gap-3 text-[10px] text-slate-400 font-medium">
-//                     <span>Lang: <b className="text-slate-600">{template.language}</b></span>
-//                     <span>Format: <b className="text-slate-600">{template.parameter_format}</b></span>
-//                   </div>
-//                 </div>
-//               );
-//             })
-//           )}
-//         </div>
-//       </div>
-
-//       {/* RIGHT COLUMN: INTERACTIVE WORKSPACE ENGINE & RECIPIENT DATA MAPPING */}
-//       <div className="flex-1 flex flex-col h-1/2 md:h-full overflow-hidden">
-        
-//         {/* Workspace Action Bar Header */}
-//         <div className="h-14 border-b border-slate-200 bg-white px-6 flex items-center justify-between shrink-0">
-//           <div className="flex items-center gap-2">
-//             <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-//             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Broadcast Automation Console</h2>
-//           </div>
-//         </div>
-
-//         {/* Dynamic Split Screen Interactive Panel View Frame */}
-//         <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6 custom-scrollbar">
-//           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-            
-//             {/* STACK A: ACTIONS CONSOLE MODULE (7 COLS) */}
-//             <div className="xl:col-span-7 space-y-5">
-              
-//               {/* File Uploader Container Matrix */}
-//               <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
-//                 <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-//                   <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-//                   1. Map Recipient Matrix Workbook
-//                 </h3>
-
-//                 <div 
-//                   onClick={() => fileInputRef.current?.click()}
-//                   className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition ${
-//                     selectedFile 
-//                       ? 'border-[#04432e] bg-emerald-50/10' 
-//                       : 'border-slate-200 hover:border-[#04432e] hover:bg-slate-50'
-//                   }`}
-//                 >
-//                   <input 
-//                     type="file" 
-//                     ref={fileInputRef}
-//                     onChange={handleFileChange}
-//                     accept=".xlsx, .xls"
-//                     className="hidden" 
-//                   />
-                  
-//                   <div className="flex flex-col items-center gap-2">
-//                     <div className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm">
-//                       <UploadCloud className="h-5 w-5" />
-//                     </div>
-//                     {selectedFile ? (
-//                       <div>
-//                         <p className="text-xs font-semibold text-slate-800">{selectedFile.name}</p>
-//                         <p className="text-[10px] text-slate-400 mt-0.5">{(selectedFile.size / 1024).toFixed(1)} KB • Click to swap workbook</p>
-//                       </div>
-//                     ) : (
-//                       <div>
-//                         <p className="text-xs font-medium text-slate-600">Click to import list configuration matrix</p>
-//                         <p className="text-[10px] text-slate-400 mt-0.5">Supports strictly standardized formatting files (.xlsx)</p>
-//                       </div>
-//                     )}
-//                   </div>
-//                 </div>
-
-//                 {/* Integration Dynamic Data Helper Table Legend Block */}
-//                 <div className="mt-4 rounded-xl bg-slate-50 border border-slate-200/60 p-3 flex gap-2.5 items-start">
-//                   <Info className="h-4 w-4 text-[#04432e] shrink-0 mt-0.5" />
-//                   <div className="text-[11px] leading-relaxed text-slate-500">
-//                     <span className="font-semibold text-slate-700 block mb-0.5">Required Row Columns Structure Legend:</span>
-//                     Your Excel sheet must declare these exact column headers to prevent processing errors:
-//                     <div className="flex flex-wrap gap-1 mt-1.5 font-mono text-[10px]">
-//                       {['Name', 'RollNumber', 'WhatsappNumber', 'FatherName', 'ObtainedMarks', 'Totalmarks'].map(col => (
-//                         <span key={col} className="bg-white px-1.5 py-0.5 border border-slate-200 rounded text-[#04432e] font-semibold">{col}</span>
-//                       ))}
-//                     </div>
-//                   </div>
-//                 </div>
-//               </div>
-
-//               {/* Launcher Processing Controls Box */}
-//               <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex items-center justify-between">
-//                 <div>
-//                   <h4 className="text-xs font-semibold text-slate-800">Deploy Automation Campaign</h4>
-//                   <p className="text-[10px] text-slate-400">Distributes variable blocks safely via authorized endpoints.</p>
-//                 </div>
-//                 <button
-//                   onClick={handleLaunchCampaign}
-//                   disabled={isSubmitting || !selectedFile || !selectedTemplate}
-//                   className="flex items-center gap-2 bg-[#04432e] hover:bg-[#033424] text-white font-medium text-xs py-2 px-5 rounded-xl shadow-sm transition disabled:opacity-40 disabled:pointer-events-none active:scale-95"
-//                 >
-//                   {isSubmitting ? (
-//                     <>
-//                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-//                       Parsing Payload...
-//                     </>
-//                   ) : (
-//                     <>
-//                       <Play className="h-3.5 w-3.5 fill-current" />
-//                       Execute Broadcast
-//                     </>
-//                   )}
-//                 </button>
-//               </div>
-
-//               {/* REAL-TIME LIVE PROGRESS CONSOLE PIPELINE MONITOR MODULE */}
-//               {activeCampaign && (
-//                 <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-//                   <div className="flex items-center justify-between">
-//                     <div>
-//                       <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-//                         <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-ping" />
-//                         Live Stream Socket Monitor
-//                       </h3>
-//                       <p className="text-[10px] text-slate-400">Tracking Campaign ID: <span className="font-mono bg-slate-50 px-1 border rounded text-slate-600">{activeCampaign}</span></p>
-//                     </div>
-//                     <span className="text-xs font-bold text-[#04432e] bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
-//                       {progressData.percentage}%
-//                     </span>
-//                   </div>
-
-//                   {/* Absolute Metrics Display Counters Row */}
-//                   <div className="grid grid-cols-3 gap-3">
-//                     <div className="p-3 bg-slate-50 border border-slate-200/60 rounded-xl text-center">
-//                       <span className="text-[10px] font-medium text-slate-400 block uppercase">Total Rows</span>
-//                       <span className="text-base font-bold text-slate-800 mt-0.5 block">{progressData.total}</span>
-//                     </div>
-//                     <div className="p-3 bg-emerald-50/40 border border-emerald-100 rounded-xl text-center">
-//                       <span className="text-[10px] font-medium text-emerald-600 block uppercase flex items-center justify-center gap-1">
-//                         <CheckCircle2 className="h-3 w-3" /> Sent
-//                       </span>
-//                       <span className="text-base font-bold text-[#04432e] mt-0.5 block">{progressData.sent}</span>
-//                     </div>
-//                     <div className="p-3 bg-rose-50/30 border border-rose-100 rounded-xl text-center">
-//                       <span className="text-[10px] font-medium text-rose-500 block uppercase flex items-center justify-center gap-1">
-//                         <XCircle className="h-3 w-3" /> Failed
-//                       </span>
-//                       <span className="text-base font-bold text-rose-700 mt-0.5 block">{progressData.failed}</span>
-//                     </div>
-//                   </div>
-
-//                   {/* UI Linear Processing Progress Bar Meter Container */}
-//                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-//                     <div 
-//                       className="bg-[#04432e] h-full rounded-full transition-all duration-300"
-//                       style={{ width: `${progressData.percentage}%` }}
-//                     />
-//                   </div>
-
-//                   {/* Warning Note Helper Context Footer */}
-//                   <div className="flex items-center gap-1.5 text-[10px] text-amber-600 bg-amber-50/50 border border-amber-100 p-2.5 rounded-xl">
-//                     <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-//                     <span>Processing contains randomized 3-5s spacing delays to ensure platform parsing stability. Do not hard reload.</span>
-//                   </div>
-//                 </div>
-//               )}
-//             </div>
-
-//             {/* STACK B: VISUAL LIVE PHONE DEVICE PREVIEW LAYER CONTAINER (5 COLS) */}
-//             <div className="xl:col-span-5 flex justify-center">
-//               <div className="w-full max-w-[290px] border-[6px] border-slate-800 rounded-[36px] shadow-xl bg-white relative overflow-hidden aspect-[9/18] flex flex-col shrink-0">
-//                 <div className="absolute top-0 inset-x-0 h-4 bg-slate-800 flex justify-center items-start z-30">
-//                   <div className="w-16 h-2 bg-slate-900 rounded-b-md" />
-//                 </div>
-
-//                 <div className="flex-1 flex flex-col pt-4 bg-[#efeae2] relative">
-//                   <div className="h-10 bg-[#04432e] px-3 flex items-center gap-2 text-white shadow-sm shrink-0">
-//                     <Smartphone className="h-3.5 w-3.5 opacity-70" />
-//                     <div className="min-w-0">
-//                       <p className="text-[9px] font-bold leading-none truncate">Template Live Preview</p>
-//                       <p className="text-[7px] text-emerald-200/80 tracking-wide mt-0.5">Meta Distribution Render</p>
-//                     </div>
-//                   </div>
-
-//                   <div className="flex-1 p-3 overflow-y-auto space-y-2">
-//                     {selectedTemplate ? (
-//                       <div className="max-w-[90%] bg-white rounded-xl shadow-sm border border-slate-200/40 p-2.5 space-y-1.5 relative">
-//                         {selectedTemplate.components?.find(c => c.type === "HEADER") && (
-//                           <div className="text-[10px] font-bold text-slate-800 border-b border-slate-100 pb-1">
-//                             {selectedTemplate.components.find(c => c.type === "HEADER").text}
-//                           </div>
-//                         )}
-
-//                         {selectedTemplate.components?.find(c => c.type === "BODY") && (
-//                           <div className="text-[9px] leading-relaxed text-slate-600 whitespace-pre-wrap">
-//                             {selectedTemplate.name === "3p_direct_integration_test_template" ? (
-//                               selectedTemplate.components.find(c => c.type === "BODY").text
-//                             ) : (
-//                               <>
-//                                 Result for <span className="bg-amber-100 text-amber-800 font-mono px-0.5 rounded text-[8px]">{"{{Name}}"}</span>.<br />
-//                                 Roll Number: <span className="bg-amber-100 text-amber-800 font-mono px-0.5 rounded text-[8px]">{"{{RollNumber}}"}</span>.<br />
-//                                 Father Name: <span className="bg-amber-100 text-amber-800 font-mono px-0.5 rounded text-[8px]">{"{{FatherName}}"}</span>.<br />
-//                                 Obtained Marks: <span className="bg-amber-100 text-amber-800 font-mono px-0.5 rounded text-[8px]">{"{{ObtainedMarks}}"}</span>.<br />
-//                                 Total Marks: <span className="bg-amber-100 text-amber-800 font-mono px-0.5 rounded text-[8px]">{"{{TotalMarks}}"}</span>.
-//                               </>
-//                             )}
-//                           </div>
-//                         )}
-
-//                         {selectedTemplate.components?.find(c => c.type === "FOOTER") && (
-//                           <div className="text-[7.5px] font-medium text-slate-400 uppercase tracking-tight pt-0.5">
-//                             {selectedTemplate.components.find(c => c.type === "FOOTER").text}
-//                           </div>
-//                         )}
-//                         <div className="absolute left-[-4px] top-2.5 w-0 h-0 border-t-[4px] border-t-transparent border-r-[5px] border-r-white border-b-[4px] border-b-transparent" />
-//                       </div>
-//                     ) : (
-//                       <div className="h-full flex items-center justify-center text-center p-4 text-[10px] text-slate-400 italic">
-//                         Select a template structure to map preview displays.
-//                       </div>
-//                     )}
-//                   </div>
-//                 </div>
-//               </div>
-//             </div>
-
-//           </div>
-//         </div>
-
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default BroadcastTemplate;
 
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -417,7 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { socket } from '../../socket';
-import { useGetTemplatesQuery, useSendBulkTemplateMutation } from '../../features/messages/messagesApi';
+import { useGetTemplatesQuery, useSendBulkTemplateMutation,useCancelBulkCampaignMutation  } from '../../features/messages/messagesApi';
 
 // ─── Persistence Keys ──────────────────────────────────────────────────────────
 const STORAGE_KEY_CAMPAIGN  = 'broadcast_activeCampaign';
@@ -462,8 +61,13 @@ const clearStorage = () => {
 const BroadcastTemplate = () => {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [selectedFile,     setSelectedFile]     = useState(null);
+  const [variableInput, setVariableInput] = useState('');
+  const [headerType, setHeaderType] = useState('none');
+  const [headerMediaId, setHeaderMediaId] = useState('');
+  const [headerMediaLink, setHeaderMediaLink] = useState('');
   const fileInputRef = useRef(null);
-
+const [cancelBulkCampaign, { isLoading: isCancelling }] = useCancelBulkCampaignMutation();
+const [isCancelled, setIsCancelled] = useState(false);
   // Restored from localStorage on first mount
   const [activeCampaign, setActiveCampaign] = useState(() => loadFromStorage().campaignId);
   const [progressData,   setProgressData]   = useState(() => loadFromStorage().progress);
@@ -480,6 +84,16 @@ const BroadcastTemplate = () => {
     }
   }, [templates, selectedTemplate]);
 
+
+  const handleCancelCampaign = async () => {
+  if (!activeCampaign) return;
+  try {
+    await cancelBulkCampaign(activeCampaign).unwrap();
+    toast.success('Cancel requested — stopping after the current message.');
+  } catch (err) {
+    toast.error(err?.data?.message || 'Failed to cancel campaign.');
+  }
+};
   // ── Keep localStorage in sync whenever state changes ──────────────────────
   useEffect(() => {
     if (activeCampaign) {
@@ -537,9 +151,23 @@ useEffect(() => {
 
     socket.on('bulk_progress', handleProgress);
 
+
+const handleStatusChanged = (data) => {
+  if (String(data.campaignId) !== String(activeCampaign)) return;
+  if (data.status === 'cancelled') {
+    setIsCancelled(true);
+    setIsCompleted(true); // reuse completed UI state to stop showing "in progress"
+    toast('Campaign cancelled.');
+  }
+};
+
+socket.on('campaign_status_changed', handleStatusChanged);
+// remember to also add: socket.off('campaign_status_changed', handleStatusChanged); in cleanup
+
     return () => {
       socket.off('connect', joinRoom);       // ← new cleanup
       socket.off('bulk_progress', handleProgress);
+      socket.off('campaign_status_changed', handleStatusChanged);
     };
   }, [activeCampaign]);
 
@@ -564,10 +192,19 @@ useEffect(() => {
     if (!selectedFile)     return toast.error('Please upload a recipient file.');
 
     try {
+      const variableColumns = variableInput
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
       const response = await sendBulkTemplate({
         file:         selectedFile,
         templateName: selectedTemplate.name,
         langCode:     selectedTemplate.language || 'en_US',
+        variableColumns,
+        headerType,
+        headerMediaId: headerMediaId.trim(),
+        headerMediaLink: headerMediaLink.trim(),
       }).unwrap();
 
       if (response?.success) {
@@ -591,6 +228,11 @@ useEffect(() => {
     setProgressData(DEFAULT_PROGRESS);
     setIsCompleted(false);
     setSelectedFile(null);
+    setVariableInput('');
+    setHeaderType('none');
+    setHeaderMediaId('');
+    setHeaderMediaLink('');
+    setIsCancelled(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -759,10 +401,57 @@ useEffect(() => {
 </a>
                   </div>
 
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">2. Template Variables / Header Media</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="md:col-span-2">
+                        <label className="text-[10px] font-semibold text-slate-500">Body variable columns (optional, comma separated)</label>
+                        <input
+                          value={variableInput}
+                          onChange={(e) => setVariableInput(e.target.value)}
+                          placeholder="Example: Name, RollNumber, __marks__, TestName"
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-[#04432e]"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">Leave blank for existing result/attendance templates. Use __marks__ for ObtainedMarks/Totalmarks.</p>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500">Template header media type</label>
+                        <select
+                          value={headerType}
+                          onChange={(e) => setHeaderType(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-[#04432e]"
+                        >
+                          <option value="none">No media header</option>
+                          <option value="image">Image</option>
+                          <option value="video">Video</option>
+                          <option value="document">Document</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500">Header media ID</label>
+                        <input
+                          value={headerMediaId}
+                          onChange={(e) => setHeaderMediaId(e.target.value)}
+                          placeholder="Meta media id"
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-[#04432e]"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-[10px] font-semibold text-slate-500">Or header public media link</label>
+                        <input
+                          value={headerMediaLink}
+                          onChange={(e) => setHeaderMediaLink(e.target.value)}
+                          placeholder="https://..."
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-[#04432e]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Launch button */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex items-center justify-between">
                     <div>
-                      <h4 className="text-xs font-semibold text-slate-800">2. Launch Campaign</h4>
+                      <h4 className="text-xs font-semibold text-slate-800">3. Launch Campaign</h4>
                       <p className="text-[10px] text-slate-400">Sends to all rows in the uploaded file.</p>
                     </div>
                     <button
@@ -804,6 +493,18 @@ useEffect(() => {
                     }`}>
                       {progressData.percentage}%
                     </span>
+
+
+                        {!isCompleted && (
+      <button
+        onClick={handleCancelCampaign}
+        disabled={isCancelling}
+        className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-800 border border-rose-200 hover:border-rose-300 px-3 py-1.5 rounded-lg transition disabled:opacity-40"
+      >
+        {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+        Cancel
+      </button>
+    )}
                   </div>
 
                   {/* Counters */}

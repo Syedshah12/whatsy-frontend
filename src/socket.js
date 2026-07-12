@@ -1,15 +1,4 @@
 import { io } from "socket.io-client";
+import { SOCKET_URL } from "./config/api";
 
-
-export const socket = io(
-    "https://whatsy-backend-production.up.railway.app",
-    {
-        transports:["websocket"]
-    }
-);
-// export const socket = io(
-//     "http://localhost:3000",
-//     {
-//         transports:["websocket"]
-//     }
-// );
+export const socket = io(SOCKET_URL, { transports: ["websocket"] });

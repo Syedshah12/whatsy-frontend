@@ -1,10 +1,8 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
 
-const BASE_URL = "https://whatsy-backend-production.up.railway.app/api/conversations";
-// const BASE_URL = "http://localhost:3000/api/conversations";
-// later:
-// https://your-backend.up.railway.app/api/conversations
+import { API_CONVERSATIONS } from "../../config/api";
+const BASE_URL = API_CONVERSATIONS;
 
 
 export const chatApi = createApi({
@@ -40,19 +38,66 @@ export const chatApi = createApi({
 
   endpoints: (builder) => ({
 
+getConversations: builder.query({
+  query: ({ page, limit, search }) => ({
+    url: "/",
+    params: { page, limit, ...(search ? { search } : {}) },
+  }),
 
-    // GET ALL CONVERSATIONS
-    getConversations: builder.query({
-      query: (params) => ({
-        url: "/",
-        params,
-      }),
+  // Cache separately per search term (but still share cache across pages of the same search)
+  serializeQueryArgs: ({ endpointName, queryArgs }) => {
+    return `${endpointName}-${queryArgs.search || ''}`;
+  },
 
-      providesTags: [
-        "Conversations"
-      ],
+  merge: (currentCache, newItems) => {
+    if (newItems?.pagination?.page === 1) {
+      currentCache.data = newItems.data;
+    } else {
+      currentCache.data.push(...newItems.data);
+    }
+    currentCache.pagination = newItems.pagination;
+  },
 
-    }),
+  // Refetch when page changes OR when search changes
+  forceRefetch({ currentArg, previousArg }) {
+    return (
+      currentArg?.page !== previousArg?.page ||
+      currentArg?.search !== previousArg?.search
+    );
+  },
+
+  providesTags: ["Conversations"],
+}),
+// getConversations: builder.query({
+//   query: ({ page, limit }) => ({
+//     url: "/",
+//     params: { page, limit },
+//   }),
+
+//   serializeQueryArgs: ({ endpointName }) => endpointName,
+
+//   merge: (currentCache, newItems) => {
+//     if (newItems?.pagination?.page === 1) {
+//       currentCache.data = newItems.data;
+//     } else {
+//       currentCache.data.push(...newItems.data);
+//     }
+//     currentCache.pagination = newItems.pagination;
+//   },
+
+//   forceRefetch({ currentArg, previousArg }) {
+//     return currentArg?.page !== previousArg?.page;
+//   },
+
+//   providesTags: ["Conversations"],
+// }),
+
+
+
+
+
+
+
 
 
 

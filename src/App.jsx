@@ -81,12 +81,12 @@ const App = () => {
           path="/login"
           element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />}
         />
-
+   <Route path="campaigns" element={<CampaignsList />} />
+            <Route path="campaigns/:campaignId" element={<CampaignDetails />} />
         {/* All protected pages live under this guard */}
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<MainLayout />}>
-            <Route path="campaigns" element={<CampaignsList />} />
-            <Route path="campaigns/:campaignId" element={<CampaignDetails />} />
+         
           </Route>
         </Route>
 

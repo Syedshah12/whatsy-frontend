@@ -1,11 +1,7 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { API_AUTH } from "../../config/api";
 
-const BASE_URL =
-  "https://whatsy-backend-production.up.railway.app/api/auth";
-  // "http://localhost:3000/api/auth";
-
-// Railway later:
-// https://your-backend.up.railway.app/api/auth
+const BASE_URL = API_AUTH;
 
 export const authApi = createApi({
   reducerPath: "authApi",
