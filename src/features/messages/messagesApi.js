@@ -46,9 +46,9 @@ export const messageApi = createApi({
     }),
 
     sendBulkTemplate: builder.mutation({
-      query: ({ file, templateName, langCode, variableColumns, headerType, headerMediaId, headerMediaLink, headerDocumentFilename }) => {
+      query: ({ files, templateName, langCode, variableColumns, headerType, headerMediaId, headerMediaLink, headerDocumentFilename }) => {
         const formData = new FormData();
-        formData.append("file", file);
+        files.forEach((file) => formData.append("file", file));
         formData.append("templateName", templateName);
         formData.append("langCode", langCode || "en_US");
         if (variableColumns?.length) formData.append("variableColumns", JSON.stringify(variableColumns));

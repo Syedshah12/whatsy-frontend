@@ -25,6 +25,26 @@ const STORAGE_KEY_COMPLETED = 'broadcast_isCompleted';
 
 const DEFAULT_PROGRESS = { total: 0, sent: 0, failed: 0, percentage: 0 };
 
+// Excel layout expected by each template (column names must match the backend bindings)
+const SAMPLE_FILES = {
+  attendance: {
+    columns: ['WhatsappNumber', 'Name', 'Date'],
+    href: '/attendance-sample.xlsx',
+    label: 'Attendance',
+  },
+  bulk_subject: {
+    columns: ['WhatsappNumber', 'RollNumber', 'Name', 'SubjectResults'],
+    href: '/bulk-subject-sample.xlsx',
+    label: 'Bulk Subject',
+    note: 'Keep SubjectResults on one line (e.g. "English : 8/10, Math : 7/10") — WhatsApp rejects line breaks.',
+  },
+};
+const DEFAULT_SAMPLE = {
+  columns: ['Name', 'RollNumber', 'WhatsappNumber', 'FatherName', 'ObtainedMarks', 'Totalmarks', 'TestName', 'Date'],
+  href: '/sample-template.xlsx',
+  label: 'Result',
+};
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const saveToStorage = (campaignId, progress, isCompleted) => {
   try {
@@ -60,7 +80,7 @@ const clearStorage = () => {
 // ─── Component ─────────────────────────────────────────────────────────────────
 const BroadcastTemplate = () => {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [selectedFile,     setSelectedFile]     = useState(null);
+  const [selectedFiles,    setSelectedFiles]    = useState([]);
   const [variableInput, setVariableInput] = useState('');
   const [headerType, setHeaderType] = useState('none');
   const [headerMediaId, setHeaderMediaId] = useState('');
@@ -77,12 +97,6 @@ const [isCancelled, setIsCancelled] = useState(false);
   const { data: templatesResponse, isLoading: isTemplatesLoading } = useGetTemplatesQuery();
   const [sendBulkTemplate, { isLoading: isSubmitting }]           = useSendBulkTemplateMutation();
   const templates = templatesResponse?.data || [];
-
-  useEffect(() => {
-    if (templates.length > 0 && !selectedTemplate) {
-      setSelectedTemplate(templates[0]);
-    }
-  }, [templates, selectedTemplate]);
 
 
   const handleCancelCampaign = async () => {
@@ -137,10 +151,6 @@ useEffect(() => {
       setProgressData(next);
       saveToStorage(activeCampaign, next, false);
 
-      if (data.phone) {
-        toast.success(`Sent to +${data.phone}`);
-      }
-
       const done = data.total > 0 && (data.sent + data.failed >= data.total);
       if (done) {
         setIsCompleted(true);
@@ -173,23 +183,21 @@ socket.on('campaign_status_changed', handleStatusChanged);
 
   // ── File selection ─────────────────────────────────────────────────────────
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    const valid = file && (
-      file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-      file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
-    );
-    if (valid) {
-      setSelectedFile(file);
-      toast.success('Workbook uploaded successfully!');
-    } else {
-      toast.error('Please upload a valid Excel file (.xlsx).');
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const invalid = files.filter((file) => !/\.xlsx?$/i.test(file.name));
+    if (invalid.length) {
+      toast.error(`Not an Excel file: ${invalid.map((f) => f.name).join(', ')}`);
+      return;
     }
+    setSelectedFiles(files);
+    toast.success(files.length > 1 ? `${files.length} workbooks selected` : 'Workbook uploaded successfully!');
   };
 
   // ── Launch campaign ────────────────────────────────────────────────────────
   const handleLaunchCampaign = async () => {
-    if (!selectedTemplate) return toast.error('Please select a template.');
-    if (!selectedFile)     return toast.error('Please upload a recipient file.');
+    if (!selectedTemplate)     return toast.error('Please select a template.');
+    if (!selectedFiles.length) return toast.error('Please upload a recipient file.');
 
     try {
       const variableColumns = variableInput
@@ -198,7 +206,7 @@ socket.on('campaign_status_changed', handleStatusChanged);
         .filter(Boolean);
 
       const response = await sendBulkTemplate({
-        file:         selectedFile,
+        files:        selectedFiles,
         templateName: selectedTemplate.name,
         langCode:     selectedTemplate.language || 'en_US',
         variableColumns,
@@ -224,10 +232,12 @@ socket.on('campaign_status_changed', handleStatusChanged);
   // ── Reset / start new campaign ─────────────────────────────────────────────
   const handleReset = () => {
     clearStorage();
+    toast.dismiss();
     setActiveCampaign(null);
     setProgressData(DEFAULT_PROGRESS);
     setIsCompleted(false);
-    setSelectedFile(null);
+    setSelectedTemplate(null);
+    setSelectedFiles([]);
     setVariableInput('');
     setHeaderType('none');
     setHeaderMediaId('');
@@ -237,6 +247,7 @@ socket.on('campaign_status_changed', handleStatusChanged);
   };
 
   const isResumingCampaign = !!activeCampaign && !isCompleted && !isSubmitting;
+  const sample = SAMPLE_FILES[selectedTemplate?.name] || DEFAULT_SAMPLE;
 
   return (
     <div className="flex h-screen w-full flex-col md:flex-row bg-[#f8f9fa] font-sans antialiased text-slate-700 overflow-hidden">
@@ -343,7 +354,7 @@ socket.on('campaign_status_changed', handleStatusChanged);
                     <div
                       onClick={() => fileInputRef.current?.click()}
                       className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition ${
-                        selectedFile
+                        selectedFiles.length
                           ? 'border-[#04432e] bg-emerald-50/10'
                           : 'border-slate-200 hover:border-[#04432e] hover:bg-slate-50'
                       }`}
@@ -353,21 +364,28 @@ socket.on('campaign_status_changed', handleStatusChanged);
                         ref={fileInputRef}
                         onChange={handleFileChange}
                         accept=".xlsx, .xls"
+                        multiple
                         className="hidden"
                       />
                       <div className="flex flex-col items-center gap-2">
                         <div className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm">
                           <UploadCloud className="h-5 w-5" />
                         </div>
-                        {selectedFile ? (
+                        {selectedFiles.length ? (
                           <div>
-                            <p className="text-xs font-semibold text-slate-800">{selectedFile.name}</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">{(selectedFile.size / 1024).toFixed(1)} KB • Click to replace</p>
+                            {selectedFiles.map((file) => (
+                              <p key={file.name} className="text-xs font-semibold text-slate-800">
+                                {file.name} <span className="text-[10px] font-normal text-slate-400">({(file.size / 1024).toFixed(1)} KB)</span>
+                              </p>
+                            ))}
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              {selectedFiles.length > 1 ? `${selectedFiles.length} files will be sent as one campaign • ` : ''}Click to replace
+                            </p>
                           </div>
                         ) : (
                           <div>
                             <p className="text-xs font-medium text-slate-600">Click to upload recipient list</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">Supports .xlsx files only</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Supports .xlsx files • select multiple files at once</p>
                           </div>
                         )}
                       </div>
@@ -376,29 +394,35 @@ socket.on('campaign_status_changed', handleStatusChanged);
                     <div className="mt-4 rounded-xl bg-slate-50 border border-slate-200/60 p-3 flex gap-2.5 items-start">
                       <Info className="h-4 w-4 text-[#04432e] shrink-0 mt-0.5" />
                       <div className="text-[11px] leading-relaxed text-slate-500">
-                        <span className="font-semibold text-slate-700 block mb-0.5">Required column headers:</span>
+                        <span className="font-semibold text-slate-700 block mb-0.5">
+                          Required column headers{selectedTemplate ? ` for ${selectedTemplate.name}` : ''}:
+                        </span>
                         <div className="flex flex-wrap gap-1 mt-1.5 font-mono text-[10px]">
-                          {['Name', 'RollNumber', 'WhatsappNumber', 'FatherName', 'ObtainedMarks', 'Totalmarks','TestName','Date'].map(col => (
+                          {sample.columns.map(col => (
                             <span key={col} className="bg-white px-1.5 py-0.5 border border-slate-200 rounded text-[#04432e] font-semibold">{col}</span>
                           ))}
                         </div>
+                        {sample.note && <p className="mt-1.5 text-[10px] text-amber-700">{sample.note}</p>}
                       </div>
                     </div>
 
-                    <a
-  href="/sample-template.xlsx"
-  download
-  className="mt-3 w-full flex items-center justify-center gap-2 
-  bg-emerald-50 hover:bg-emerald-100 
-  border border-emerald-200 
-  text-[#04432e] 
-  text-xs font-semibold 
-  py-2.5 rounded-xl 
-  transition active:scale-95"
->
-  <FileSpreadsheet className="h-4 w-4" />
-  Download Sample Excel Template
-</a>
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {[SAMPLE_FILES.attendance, SAMPLE_FILES.bulk_subject, DEFAULT_SAMPLE].map((file) => (
+                        <a
+                          key={file.href}
+                          href={file.href}
+                          download
+                          className={`flex items-center justify-center gap-1.5 border text-xs font-semibold py-2.5 rounded-xl transition active:scale-95 ${
+                            file === sample
+                              ? 'bg-[#04432e] border-[#04432e] text-white'
+                              : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-[#04432e]'
+                          }`}
+                        >
+                          <FileSpreadsheet className="h-4 w-4" />
+                          {file.label} Sample
+                        </a>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
@@ -456,7 +480,7 @@ socket.on('campaign_status_changed', handleStatusChanged);
                     </div>
                     <button
                       onClick={handleLaunchCampaign}
-                      disabled={isSubmitting || !selectedFile || !selectedTemplate}
+                      disabled={isSubmitting || !selectedFiles.length || !selectedTemplate}
                       className="flex items-center gap-2 bg-[#04432e] hover:bg-[#033424] text-white font-medium text-xs py-2 px-5 rounded-xl shadow-sm transition disabled:opacity-40 disabled:pointer-events-none active:scale-95"
                     >
                       {isSubmitting ? (

@@ -332,11 +332,12 @@ import {
   Download,
   Printer
 } from 'lucide-react';
-import { 
-  useGetBillingsQuery, 
-  useGetBillingSummaryQuery, 
+import {
+  useGetBillingsQuery,
+  useGetBillingSummaryQuery,
   useGetCampaignBillingQuery,
   useGetBillingReceiptMutation,
+  useGetBillingsByDateRangeQuery,
 } from '../../features/billing/billingApi';
 import { 
   useGetAllCampaignsQuery
@@ -817,6 +818,319 @@ const ReceiptModal = ({ onClose }) => {
   );
 };
 
+// ─── Professional Meta Receipt Modal (issued by Binary Bridges) ───────────────
+const META_LOGO_SVG = `<svg width="82" height="50" viewBox="0 0 86 54" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bbMetaGrad" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#0064E1"/><stop offset="45%" stop-color="#0082FB"/><stop offset="100%" stop-color="#19AFFF"/></linearGradient></defs><path fill="url(#bbMetaGrad)" d="M14.5 6C6 6 2 18.4 2 28.6 2 39.4 7 47 15.6 47c7.7 0 12.9-6.6 19.8-19 3.6-6.5 6.6-12.2 6.6-12.2s3 5.7 6.6 12.2C55.5 40.4 60.7 47 68.4 47 77 47 82 39.4 82 28.6 82 18.4 78 6 69.5 6 61 6 54.2 13.8 48.4 24c-3 5.3-5.4 9.9-5.4 9.9s-2.4-4.6-5.4-9.9C31.8 13.8 25 6 14.5 6Zm0 7.4c5.7 0 10.6 5.9 15 14.2-3.6 6.7-7.7 11.6-13.6 11.6-4.6 0-6.8-5.4-6.8-11 0-5.9 1.9-14.8 5.4-14.8Zm55 0c3.5 0 5.4 8.9 5.4 14.8 0 5.6-2.2 11-6.8 11-5.9 0-10-4.9-13.6-11.6 4.4-8.3 9.3-14.2 15-14.2Z"/></svg>`;
+
+const MetaReceiptModal = ({ onClose }) => {
+  const today = new Date().toISOString().split('T')[0];
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
+  const [alreadyDeducted, setAlreadyDeducted] = useState('');
+  const [receiptData, setReceiptData] = useState(null);
+  const [getBillingReceipt, { isLoading }] = useGetBillingReceiptMutation();
+
+  const handleGenerate = async () => {
+    try {
+      const res = await getBillingReceipt({ from, to }).unwrap();
+      setReceiptData(res);
+    } catch {
+      alert('Failed to generate receipt. Please try again.');
+    }
+  };
+
+  // ── Derived figures ──
+  const gross = receiptData?.totalAmount || 0;
+  const msgs = receiptData?.totalMessages || 0;
+  const perMsg = msgs ? gross / msgs : 0;
+  const deducted = Math.max(0, parseFloat(alreadyDeducted) || 0);
+  const net = gross - deducted;
+  const campaignCount = receiptData
+    ? new Set((receiptData.records || []).map(r => r.campaignId?._id || r.templateName || 'x')).size
+    : 0;
+
+  const money = (n) =>
+    '₨ ' + Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const handleDownload = () => {
+    if (!receiptData) return;
+
+    const d = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const now = new Date();
+    const receiptNo = `BB-META-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(Math.random() * 9000 + 1000)}`;
+    const pFrom = receiptData.period?.from || from;
+    const pTo = receiptData.period?.to || to;
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${receiptNo} — Whatsy CRM (Meta) Receipt</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #fff; }
+  body { font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #0f172a; font-size: 11px; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sheet { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 15mm 14mm 12mm; position: relative; display: flex; flex-direction: column; }
+  .sheet::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, #0064E1, #0082FB, #19AFFF); }
+
+  .hd { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 16px; border-bottom: 1px solid #e5e9f0; }
+  .bb-lock { display: flex; align-items: center; gap: 11px; }
+  .bb-mark { width: 42px; height: 42px; border-radius: 10px; background: #0f172a; color: #fff; font-weight: 800; font-size: 15px; letter-spacing: .5px; display: flex; align-items: center; justify-content: center; }
+  .bb-name { font-size: 15px; font-weight: 800; letter-spacing: 1.5px; color: #0f172a; }
+  .bb-tag { font-size: 8.5px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: #64748b; margin-top: 2px; }
+  .bb-contact { font-size: 9px; color: #94a3b8; margin-top: 8px; letter-spacing: .3px; }
+  .hd-r { text-align: right; }
+  .in-p { font-size: 8px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-top: 4px; }
+  .in-p b { color: #0082FB; }
+
+  .title-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+  .t-main { font-size: 17px; font-weight: 800; color: #0f172a; letter-spacing: .2px; }
+  .t-sub { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: #0082FB; margin-top: 3px; }
+  .t-badge { font-size: 11px; font-weight: 800; letter-spacing: 2px; color: #0f766e; border: 2px solid #0f766e; border-radius: 7px; padding: 5px 14px; }
+
+  .info { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #e5e9f0; border: 1px solid #e5e9f0; border-radius: 9px; overflow: hidden; margin-top: 16px; }
+  .info > div { background: #fff; padding: 10px 12px; }
+  .info span { display: block; font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #94a3b8; margin-bottom: 3px; }
+  .info b { font-size: 10.5px; font-weight: 700; color: #0f172a; }
+
+  .sec-h { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.6px; color: #94a3b8; margin: 22px 0 8px; }
+
+  table.chg { width: 100%; border-collapse: collapse; }
+  table.chg th { background: #0f172a; color: #fff; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .9px; padding: 9px 12px; text-align: left; }
+  table.chg th.c { text-align: center; } table.chg th.r { text-align: right; }
+  table.chg td { padding: 12px; border: 1px solid #e5e9f0; border-top: none; font-size: 10.5px; vertical-align: top; }
+  table.chg td.c { text-align: center; font-weight: 700; } table.chg td.r { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .dim { color: #94a3b8; font-size: 9px; font-weight: 400; }
+
+  .tots { margin-top: 14px; margin-left: auto; width: 60%; }
+  .tots .row { display: flex; justify-content: space-between; padding: 7px 12px; font-size: 10.5px; }
+  .tots .row span { color: #475569; }
+  .tots .row b { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tots .row.sep { border-top: 1px solid #e5e9f0; }
+  .tots .grand { background: #0f172a; color: #fff; border-radius: 8px; margin-top: 6px; padding: 12px; }
+  .tots .grand span { color: rgba(255,255,255,.7); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; font-size: 10px; }
+  .tots .grand b { font-size: 15px; }
+  .credit-note { font-size: 8.5px; color: #b45309; margin-top: 6px; text-align: right; }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 22px; }
+  .metrics > div { border: 1px solid #e5e9f0; border-radius: 9px; padding: 11px 12px; }
+  .metrics span { display: block; font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: #94a3b8; margin-bottom: 5px; }
+  .metrics b { font-size: 14px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
+
+  .notes { margin-top: 20px; background: #f8fafc; border: 1px solid #e5e9f0; border-radius: 9px; padding: 12px 14px; }
+  .notes-h { font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; color: #64748b; margin-bottom: 6px; }
+  .notes ul { margin: 0; padding-left: 15px; }
+  .notes li { font-size: 9px; color: #64748b; margin-bottom: 3px; line-height: 1.5; }
+
+  .ft { margin-top: auto; padding-top: 18px; display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid #e5e9f0; }
+  .sig-line { width: 150px; border-top: 1.5px solid #0f172a; margin-bottom: 5px; }
+  .ft-sign span { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #64748b; }
+  .ft-note { font-size: 8px; color: #94a3b8; text-align: right; line-height: 1.7; }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="hd">
+      <div class="hd-l">
+        <div class="bb-lock">
+          <div class="bb-mark">BB</div>
+          <div>
+            <div class="bb-name">BINARY BRIDGES</div>
+            <div class="bb-tag">WhatsApp Business Messaging Partner</div>
+          </div>
+        </div>
+        <div class="bb-contact">billing@binarybridges.io &nbsp;&middot;&nbsp; www.binarybridges.io</div>
+      </div>
+      <div class="hd-r">
+        ${META_LOGO_SVG}
+        <div class="in-p">Charges billed via <b>Meta</b></div>
+      </div>
+    </div>
+
+    <div class="title-bar">
+      <div>
+        <div class="t-main">Whatsy CRM &mdash; Meta Messaging Charges</div>
+        <div class="t-sub">Official Payment Receipt</div>
+      </div>
+      <div class="t-badge">PAID</div>
+    </div>
+
+    <div class="info">
+      <div><span>Receipt No.</span><b>${receiptNo}</b></div>
+      <div><span>Issue Date</span><b>${d(now)}</b></div>
+      <div><span>Billing Period</span><b>${d(pFrom)} &ndash; ${d(pTo)}</b></div>
+      <div><span>Currency</span><b>PKR (&#8360;)</b></div>
+    </div>
+
+    <div class="sec-h">Charges Summary</div>
+    <table class="chg">
+      <thead><tr><th>Description</th><th class="c">Messages</th><th class="r">Unit Charge</th><th class="r">Amount</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>WhatsApp Business Platform &mdash; Meta conversation charges</b><br><span class="dim">Template &amp; session messages delivered through the Meta Cloud API across ${campaignCount} campaign(s) during the billing period.</span></td>
+          <td class="c">${msgs.toLocaleString()}</td>
+          <td class="r">${money(perMsg)}</td>
+          <td class="r">${money(gross)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="tots">
+      <div class="row"><span>Gross Meta Charges (period)</span><b>${money(gross)}</b></div>
+      <div class="row sep"><span>Less: Amount Already Deducted / Prepaid</span><b>&minus; ${money(deducted)}</b></div>
+      <div class="row grand"><span>Net Amount Payable</span><b>${money(net)}</b></div>
+      ${net < 0 ? `<div class="credit-note">Credit balance of ${money(Math.abs(net))} carried forward to the next billing cycle.</div>` : ''}
+    </div>
+
+    <div class="sec-h">Usage Details</div>
+    <div class="metrics">
+      <div><span>Total Messages Sent</span><b>${msgs.toLocaleString()}</b></div>
+      <div><span>Avg. Cost / Message</span><b>${money(perMsg)}</b></div>
+      <div><span>Campaigns Billed</span><b>${campaignCount}</b></div>
+      <div><span>Amount Deducted</span><b>${money(deducted)}</b></div>
+    </div>
+
+    <div class="notes">
+      <div class="notes-h">Notes</div>
+      <ul>
+        <li>Charges reflect Meta's conversation-based pricing for the WhatsApp Business Platform and are passed through at cost by Binary Bridges.</li>
+        <li>"Amount Already Deducted / Prepaid" is the value recorded by the account holder as previously settled against this billing period.</li>
+        <li>Amounts are inclusive of applicable Meta platform fees. Government taxes, where applicable, are billed separately.</li>
+      </ul>
+    </div>
+
+    <div class="ft">
+      <div class="ft-sign">
+        <div class="sig-line"></div>
+        <span>Authorized Signatory &mdash; Binary Bridges</span>
+      </div>
+      <div class="ft-note">
+        This is a computer-generated receipt and does not require a physical signature.<br>
+        Generated by Whatsy CRM on ${now.toLocaleString('en-GB')} &middot; ${receiptNo}
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=920,height=760');
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 500);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200/60">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-[#0082FB] flex items-center justify-center">
+              <Receipt className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xs font-black text-slate-800 uppercase tracking-wider">Whatsy CRM (Meta) Receipt</h2>
+              <p className="text-[10px] text-slate-400 font-medium">Professional one-page receipt &middot; issued by Binary Bridges</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-200 rounded-xl transition text-slate-400 hover:text-slate-700">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Form */}
+        <div className="px-6 py-4 space-y-3 overflow-y-auto">
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">From Date</label>
+              <input
+                type="date"
+                value={from}
+                max={to || undefined}
+                onChange={e => setFrom(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:border-[#0082FB]/50 focus:ring-2 focus:ring-[#0082FB]/10 bg-slate-50 focus:bg-white transition"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">To Date</label>
+              <input
+                type="date"
+                value={to}
+                min={from || undefined}
+                onChange={e => setTo(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:border-[#0082FB]/50 focus:ring-2 focus:ring-[#0082FB]/10 bg-slate-50 focus:bg-white transition"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Amount Already Deducted / Prepaid (&#8360;)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={alreadyDeducted}
+              onChange={e => setAlreadyDeducted(e.target.value)}
+              placeholder="0.00"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:border-[#0082FB]/50 focus:ring-2 focus:ring-[#0082FB]/10 bg-slate-50 focus:bg-white transition font-mono"
+            />
+            <p className="text-[9px] text-slate-400 mt-1">Subtracted from the period's accumulated Meta charges to show the net amount payable.</p>
+          </div>
+
+          <button
+            onClick={handleGenerate}
+            disabled={isLoading || !from || !to}
+            className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#0082FB] text-white text-xs font-bold hover:bg-[#0064E1] active:scale-[.98] transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+          >
+            {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+            {isLoading ? 'Fetching charges…' : 'Generate Receipt'}
+          </button>
+
+          {receiptData && (
+            <div className="border border-slate-200 rounded-xl overflow-hidden mt-1">
+              <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100">
+                <div className="p-3">
+                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Total Messages</span>
+                  <span className="text-sm font-black font-mono text-slate-800">{msgs.toLocaleString()}</span>
+                </div>
+                <div className="p-3">
+                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Cost / Message</span>
+                  <span className="text-sm font-black font-mono text-slate-800">{money(perMsg)}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-slate-100">
+                <div className="p-3">
+                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Gross Meta Charges</span>
+                  <span className="text-sm font-black font-mono text-slate-800">{money(gross)}</span>
+                </div>
+                <div className="p-3 bg-[#0082FB]/5">
+                  <span className="text-[8px] font-bold text-[#0082FB] uppercase tracking-widest block mb-0.5">Net Payable</span>
+                  <span className="text-sm font-black font-mono text-[#0064E1]">{money(net)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer action */}
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 shrink-0">
+          <button
+            onClick={handleDownload}
+            disabled={!receiptData}
+            className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#0f172a] text-white text-xs font-bold hover:bg-[#1e293b] active:scale-[.98] transition disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download PDF
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 const BillingDashboard = () => {
   const [page, setPage] = useState(1);
@@ -825,24 +1139,59 @@ const BillingDashboard = () => {
   const [selectedCampaignId, setSelectedCampaignId] = useState('');
   const [activeModalId, setActiveModalId] = useState(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false); // ← NEW
+  const [showMetaReceiptModal, setShowMetaReceiptModal] = useState(false); // one-page Meta receipt
+
+  // ── Date range filter (reuses /billing/receipt, no backend change) ──
+  const [fromInput, setFromInput] = useState('');
+  const [toInput, setToInput] = useState('');
+  const [appliedRange, setAppliedRange] = useState(null); // { from, to } once applied
+  const isDateFiltered = !!appliedRange;
 
   const { data: summaryRes, isLoading: isSummaryLoading } = useGetBillingSummaryQuery();
   const { data: listRes, isLoading: isListLoading } = useGetBillingsQuery({ page, limit });
   const { data: campaignsRes } = useGetAllCampaignsQuery();
-  
+
+  const { data: rangeRes, isFetching: isRangeLoading, isError: isRangeError } =
+    useGetBillingsByDateRangeQuery(appliedRange, { skip: !appliedRange });
+
   const { data: campaignBillingRes, isLoading: isCampaignDetailLoading } = useGetCampaignBillingQuery(
-    activeModalId, 
+    activeModalId,
     { skip: !activeModalId }
   );
 
-  const summary = summaryRes?.data || { totalMessages: 0, totalAmount: 0 };
-  const billings = listRes?.data || [];
+  const allTimeSummary = summaryRes?.data || { totalMessages: 0, totalAmount: 0 };
+  const summary = isDateFiltered
+    ? { totalMessages: rangeRes?.totalMessages || 0, totalAmount: rangeRes?.totalAmount || 0 }
+    : allTimeSummary;
+  const billings = isDateFiltered ? (rangeRes?.records || []) : (listRes?.data || []);
   const totalPages = listRes?.pages || 1;
   const campaignsList = campaignsRes?.data || [];
 
-  const filteredBillings = selectedCampaignId 
+  const applyDateRange = () => {
+    if (!fromInput || !toInput) return;
+    setSelectedCampaignId('');
+    setPage(1);
+    setAppliedRange({ from: fromInput, to: toInput });
+  };
+
+  const clearDateRange = () => {
+    setFromInput('');
+    setToInput('');
+    setAppliedRange(null);
+    setPage(1);
+  };
+
+  const filteredBillings = selectedCampaignId
     ? billings.filter(b => b.campaignId?._id === selectedCampaignId)
     : billings;
+
+  // Date-filtered results come back unpaginated — paginate them on the client.
+  const effectiveTotalPages = isDateFiltered
+    ? Math.max(1, Math.ceil(filteredBillings.length / limit))
+    : totalPages;
+  const pagedBillings = isDateFiltered
+    ? filteredBillings.slice((page - 1) * limit, page * limit)
+    : filteredBillings;
 
   const getStatusBadge = (status) => {
     return status?.toLowerCase() === 'charged' ? (
@@ -879,33 +1228,89 @@ const BillingDashboard = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            {/* ── Receipt Button ── */}
-            <button
-              onClick={() => setShowReceiptModal(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#04432e] text-white text-[10px] font-bold hover:bg-[#033424] active:scale-95 transition shadow-sm shrink-0"
-            >
-              <Receipt className="h-3.5 w-3.5" />
-              Generate Receipt
-            </button>
-
-            {/* Campaign Filter */}
-            <div className="w-full sm:w-64">
-              <select
-                value={selectedCampaignId}
-                onChange={(e) => {
-                  setSelectedCampaignId(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full bg-slate-50 border border-slate-200/70 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:border-[#04432e]/40 focus:bg-white transition"
+          <div className="flex flex-col gap-2 w-full sm:w-auto sm:items-end">
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              {/* ── Receipt Button ── */}
+              <button
+                onClick={() => setShowReceiptModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#04432e] text-white text-[10px] font-bold hover:bg-[#033424] active:scale-95 transition shadow-sm shrink-0"
               >
-                <option value="">Filter View: All Campaigns</option>
-                {campaignsList.map((camp) => (
-                  <option key={camp._id} value={camp._id}>
-                    {camp.templateName?.toUpperCase()} ({new Date(camp.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })})
-                  </option>
-                ))}
-              </select>
+                <Receipt className="h-3.5 w-3.5" />
+                Generate Receipt
+              </button>
+
+              {/* ── Professional one-page Meta Receipt ── */}
+              <button
+                onClick={() => setShowMetaReceiptModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#0082FB] text-white text-[10px] font-bold hover:bg-[#0064E1] active:scale-95 transition shadow-sm shrink-0"
+              >
+                <Receipt className="h-3.5 w-3.5" />
+                Professional Receipt
+              </button>
+
+              {/* Campaign Filter */}
+              <div className="w-full sm:w-64">
+                <select
+                  value={selectedCampaignId}
+                  onChange={(e) => {
+                    setSelectedCampaignId(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200/70 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:border-[#04432e]/40 focus:bg-white transition"
+                >
+                  <option value="">Filter View: All Campaigns</option>
+                  {campaignsList.map((camp) => (
+                    <option key={camp._id} value={camp._id}>
+                      {camp.templateName?.toUpperCase()} ({new Date(camp.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* ── Date Range Filter (frontend-only, reuses /billing/receipt) ── */}
+            <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto">
+              <div className="flex items-center gap-1.5 text-slate-400">
+                <Calendar className="h-3.5 w-3.5" />
+                <span className="text-[9px] font-bold uppercase tracking-wider">Date range</span>
+              </div>
+              <div>
+                <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">From</label>
+                <input
+                  type="date"
+                  value={fromInput}
+                  max={toInput || undefined}
+                  onChange={(e) => setFromInput(e.target.value)}
+                  className="bg-slate-50 border border-slate-200/70 rounded-xl px-2.5 py-1.5 text-[11px] font-medium text-slate-700 focus:outline-none focus:border-[#04432e]/40 focus:bg-white transition"
+                />
+              </div>
+              <div>
+                <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">To</label>
+                <input
+                  type="date"
+                  value={toInput}
+                  min={fromInput || undefined}
+                  onChange={(e) => setToInput(e.target.value)}
+                  className="bg-slate-50 border border-slate-200/70 rounded-xl px-2.5 py-1.5 text-[11px] font-medium text-slate-700 focus:outline-none focus:border-[#04432e]/40 focus:bg-white transition"
+                />
+              </div>
+              <button
+                onClick={applyDateRange}
+                disabled={!fromInput || !toInput || isRangeLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#04432e] text-white text-[10px] font-bold hover:bg-[#033424] active:scale-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isRangeLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+                Apply
+              </button>
+              {isDateFiltered && (
+                <button
+                  onClick={clearDateRange}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-500 text-[10px] font-bold hover:bg-slate-50 active:scale-95 transition"
+                >
+                  <X className="h-3 w-3" />
+                  Clear
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -913,19 +1318,32 @@ const BillingDashboard = () => {
 
       <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
         
+        {/* ACTIVE DATE FILTER BANNER */}
+        {isDateFiltered && (
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-[#04432e]/5 border border-[#04432e]/15 rounded-xl px-4 py-2.5">
+            <span className="text-[10px] font-bold text-[#04432e] uppercase tracking-wider flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5" />
+              Showing charged records from {new Date(appliedRange.from).toLocaleDateString('en-GB')} to {new Date(appliedRange.to).toLocaleDateString('en-GB')}
+            </span>
+            <span className="text-[9px] font-medium text-slate-500">
+              {isRangeLoading ? 'Loading…' : `${filteredBillings.length} record(s) · refunded excluded`}
+            </span>
+          </div>
+        )}
+
         {/* PREMIUM METRIC SUMMARIES */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-[0_2px_4px_rgba(0,0,0,0.01)] relative overflow-hidden">
-            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block">Total Templates Send</span>
+            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block">{isDateFiltered ? 'Templates Sent (range)' : 'Total Templates Send'}</span>
             <span className="text-xl font-black text-slate-800 mt-1 block font-mono">{summary.totalMessages}</span>
-            <span className="text-[9px] font-medium text-slate-400 mt-1 block">Accumulated pipeline outbound attempts</span>
+            <span className="text-[9px] font-medium text-slate-400 mt-1 block">{isDateFiltered ? 'Charged messages in selected date range' : 'Accumulated pipeline outbound attempts'}</span>
             <Layers className="absolute right-4 bottom-4 h-8 w-8 text-slate-100 -z-0 pointer-events-none" />
           </div>
 
           <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-[0_2px_4px_rgba(0,0,0,0.01)] relative overflow-hidden">
-            <span className="text-[8px] font-bold text-[#04432e] uppercase tracking-wider block">Total Allocated Amount</span>
+            <span className="text-[8px] font-bold text-[#04432e] uppercase tracking-wider block">{isDateFiltered ? 'Amount Charged (range)' : 'Total Allocated Amount'}</span>
             <span className="text-xl font-black text-slate-900 mt-1 block font-mono">₨ {summary.totalAmount?.toLocaleString()}</span>
-            <span className="text-[9px] font-medium text-slate-400 mt-1 block">Charged against live cloud WhatsApp tokens</span>
+            <span className="text-[9px] font-medium text-slate-400 mt-1 block">{isDateFiltered ? 'Sum of charges in selected date range' : 'Charged against live cloud WhatsApp tokens'}</span>
             <Coins className="absolute right-4 bottom-4 h-8 w-8 text-[#04432e]/5 -z-0 pointer-events-none" />
           </div>
 
@@ -958,14 +1376,29 @@ const BillingDashboard = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs text-slate-600">
-                  {filteredBillings.length === 0 ? (
+                  {isDateFiltered && isRangeLoading ? (
+                    <tr>
+                      <td colSpan="4" className="text-center py-12 text-slate-400 text-[11px]">
+                        <Loader2 className="h-5 w-5 animate-spin text-[#04432e] mx-auto mb-2" />
+                        Loading records for selected date range…
+                      </td>
+                    </tr>
+                  ) : isDateFiltered && isRangeError ? (
+                    <tr>
+                      <td colSpan="4" className="text-center py-12 text-red-400 italic text-[11px]">
+                        Failed to load records for the selected date range. Please try again.
+                      </td>
+                    </tr>
+                  ) : filteredBillings.length === 0 ? (
                     <tr>
                       <td colSpan="4" className="text-center py-12 text-slate-400 italic text-[11px]">
-                        No cross-referenced records matching specified lookup filters.
+                        {isDateFiltered
+                          ? 'No charged records found in the selected date range.'
+                          : 'No cross-referenced records matching specified lookup filters.'}
                       </td>
                     </tr>
                   ) : (
-                    filteredBillings.map((bill) => (
+                    pagedBillings.map((bill) => (
                       <tr key={bill._id} className="hover:bg-slate-50/40 transition duration-150 group">
                         
                         <td className="py-3 px-4 sm:px-6 whitespace-nowrap">
@@ -1008,9 +1441,9 @@ const BillingDashboard = () => {
               </table>
             </div>
 
-            {!selectedCampaignId && totalPages > 1 && (
+            {(isDateFiltered || !selectedCampaignId) && effectiveTotalPages > 1 && (
               <div className="bg-slate-50 px-4 py-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Page {page} of {totalPages}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Page {page} of {effectiveTotalPages}</span>
                 <div className="flex items-center gap-1">
                   <button
                     disabled={page === 1}
@@ -1020,8 +1453,8 @@ const BillingDashboard = () => {
                     <ChevronLeft className="h-3.5 w-3.5" />
                   </button>
                   <button
-                    disabled={page === totalPages}
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === effectiveTotalPages}
+                    onClick={() => setPage(p => Math.min(effectiveTotalPages, p + 1))}
                     className="p-1.5 border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white transition active:scale-95"
                   >
                     <ChevronRight className="h-3.5 w-3.5" />
@@ -1103,6 +1536,11 @@ const BillingDashboard = () => {
       {/* ── RECEIPT MODAL ── */}
       {showReceiptModal && (
         <ReceiptModal onClose={() => setShowReceiptModal(false)} />
+      )}
+
+      {/* ── PROFESSIONAL META RECEIPT MODAL ── */}
+      {showMetaReceiptModal && (
+        <MetaReceiptModal onClose={() => setShowMetaReceiptModal(false)} />
       )}
     </div>
   );

@@ -32,6 +32,20 @@ export const billingApi = createApi({
         },
       }),
     }),
+
+    // BILLING LIST FILTERED BY DATE RANGE (reuses the receipt endpoint, no backend change)
+    getBillingsByDateRange: builder.query({
+      query: ({ from, to }) => ({
+        url: "/billing/receipt",
+        method: "POST",
+        body: {
+          from,
+          to,
+        },
+      }),
+
+      providesTags: ["Billing"],
+    }),
     // BILLING SUMMARY
     getBillingSummary: builder.query({
       query: () =>
@@ -59,5 +73,6 @@ export const {
   useGetBillingSummaryQuery,
   useGetCampaignBillingQuery,
    useGetBillingReceiptMutation,
+  useGetBillingsByDateRangeQuery,
 
 } = billingApi;
