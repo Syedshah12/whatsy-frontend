@@ -14,6 +14,29 @@ const getMediaUrl = (message) => {
   return "";
 };
 
+// Bulk campaigns attach the student(s) a number belongs to. Show
+// "Ali Khan · 2401" (and "+1 more" for siblings) instead of a bare number.
+const studentLabel = (contact) => {
+  const students = contact?.students || [];
+  if (!students.length) return "";
+  const [first] = students;
+  const main = [first.name, first.rollNumber].filter(Boolean).join(" · ");
+  return students.length > 1 ? `${main} +${students.length - 1} more` : main;
+};
+
+const contactTitle = (contact) =>
+  studentLabel(contact) || contact?.profileName || contact?.name || (contact?.phone ? `+${contact.phone}` : "Unknown");
+
+const contactSubtitle = (contact) => {
+  const parts = [];
+  if (contact?.phone) parts.push(`+${contact.phone}`);
+  if (studentLabel(contact) && contact?.profileName) parts.push(contact.profileName);
+  return parts.join(" · ");
+};
+
+const initials = (text) =>
+  String(text || "WA").replace(/[^A-Za-z0-9 ]/g, "").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "WA";
+
 const guessMediaType = (file) => {
   if (!file) return "document";
   if (file.type.startsWith("image/")) return "image";
@@ -204,12 +227,12 @@ const ChatPage = () => {
               const isActive = chat._id === selectedConversationId;
               return (
                 <button key={chat._id} onClick={() => handleSelectChat(chat._id)} className={`flex w-full items-center gap-3 rounded-xl p-3 text-left transition ${isActive ? "bg-[#e9f5f0]" : "hover:bg-slate-50"}`}>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#04432e] text-white font-semibold text-xs">
-                    {(chat.contactId?.profileName || chat.contactId?.name || chat.contactId?.phone || "WA").substring(0, 2).toUpperCase()}
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#04432e] text-white font-semibold text-xs">
+                    {initials(contactTitle(chat.contactId))}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="truncate text-xs font-semibold text-slate-800">{chat.contactId?.profileName || chat.contactId?.name || chat.contactId?.phone || "Unknown"}</h3>
+                      <h3 className="truncate text-xs font-semibold text-slate-800" title={contactSubtitle(chat.contactId)}>{contactTitle(chat.contactId)}</h3>
                       <span className={`shrink-0 text-[9px] ${chat.unreadCount > 0 ? "text-emerald-600 font-semibold" : "text-slate-400"}`}>{formatDateLabel(chat.lastMessageAt)}</span>
                     </div>
                     <div className="mt-0.5 flex items-center justify-between gap-2">
@@ -241,12 +264,17 @@ const ChatPage = () => {
             <div className="flex h-16 items-center justify-between border-b border-slate-200/80 bg-white px-4 shadow-sm z-10">
               <div className="flex items-center gap-3">
                 <button onClick={() => setIsMobileChatOpen(false)} className="p-1 rounded-full text-slate-500 hover:bg-slate-100 md:hidden transition"><ArrowLeft className="h-4 w-4" /></button>
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#04432e] text-white font-medium text-xs shadow-sm">
-                  {(activeConversation.contactId?.profileName || activeConversation.contactId?.phone || "A").substring(0, 2).toUpperCase()}
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#04432e] text-white font-medium text-xs shadow-sm">
+                  {initials(contactTitle(activeConversation.contactId))}
                 </div>
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-800 leading-tight">{activeConversation.contactId?.profileName || activeConversation.contactId?.name || activeConversation.contactId?.phone || "Anonymous User"}</h3>
-                  <p className="text-[10px] text-slate-400 font-medium">{activeConversation.contactId?.phone ? `+${activeConversation.contactId.phone}` : "No phone linked"}</p>
+                <div className="min-w-0">
+                  <h3 className="text-xs font-semibold text-slate-800 leading-tight truncate">{contactTitle(activeConversation.contactId)}</h3>
+                  <p className="text-[10px] text-slate-400 font-medium truncate">{contactSubtitle(activeConversation.contactId) || "No phone linked"}</p>
+                  {(activeConversation.contactId?.students || []).length > 1 && (
+                    <p className="text-[10px] text-slate-500 truncate">
+                      {activeConversation.contactId.students.map((s) => [s.name, s.rollNumber].filter(Boolean).join(" · ")).join(", ")}
+                    </p>
+                  )}
                 </div>
               </div>
               <button className="text-slate-400 hover:text-slate-600"><MoreVertical className="h-4 w-4" /></button>
@@ -269,6 +297,11 @@ const ChatPage = () => {
                         <span>{formatTime(message.sentAt || message.createdAt)}</span>
                         {!isInbound && <MessageStatus status={message.status} />}
                       </div>
+                      {!isInbound && message.status === "failed" && (
+                        <p className="max-w-[78%] px-1 text-[10px] leading-snug text-rose-600">
+                          Not delivered: {message.errorMessage || "WhatsApp gave no reason."}
+                        </p>
+                      )}
                     </div>
                   );
                 })

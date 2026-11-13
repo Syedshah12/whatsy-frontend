@@ -34,6 +34,9 @@ const CampaignDetails = () => {
       const matchesSearch = nameMatch || rollMatch;
 
       if (statusFilter === 'all') return matchesSearch;
+      if (statusFilter === 'pending') {
+        return matchesSearch && !['read', 'seen', 'delivered', 'sent', 'failed'].includes(recipient.status?.toLowerCase());
+      }
       return matchesSearch && recipient.status?.toLowerCase() === statusFilter.toLowerCase();
     });
   }, [recipients, searchTerm, statusFilter]);
@@ -47,8 +50,12 @@ const CampaignDetails = () => {
         return <span className="text-[9px] font-bold tracking-wider uppercase text-indigo-700 bg-indigo-50/60 px-2 py-0.5 border border-indigo-200/40 rounded-md">Delivered</span>;
       case 'sent':
         return <span className="text-[9px] font-bold tracking-wider uppercase text-blue-700 bg-blue-50/60 px-2 py-0.5 border border-blue-200/40 rounded-md">Sent</span>;
-      default:
+      case 'failed':
         return <span className="text-[9px] font-bold tracking-wider uppercase text-rose-700 bg-rose-50/60 px-2 py-0.5 border border-rose-200/40 rounded-md">Failed</span>;
+      // "pending" = not sent yet (or the campaign was cancelled before this row).
+      // Previously this fell through to "Failed", which overstated failures.
+      default:
+        return <span className="text-[9px] font-bold tracking-wider uppercase text-amber-700 bg-amber-50/60 px-2 py-0.5 border border-amber-200/40 rounded-md">Pending</span>;
     }
   };
 
@@ -155,7 +162,8 @@ const CampaignDetails = () => {
               { id: 'read', label: 'Seen', count: recipients.filter(r => ['read', 'seen'].includes(r.status?.toLowerCase())).length, color: 'text-emerald-700 bg-emerald-50/50 border-emerald-100' },
               { id: 'delivered', label: 'Delivered', count: recipients.filter(r => r.status?.toLowerCase() === 'delivered').length, color: 'text-indigo-700 bg-indigo-50/50 border-indigo-100' },
               { id: 'sent', label: 'Sent', count: recipients.filter(r => r.status?.toLowerCase() === 'sent').length, color: 'text-blue-700 bg-blue-50/50 border-blue-100' },
-              { id: 'failed', label: 'Failed', count: recipients.filter(r => !['read', 'seen', 'delivered', 'sent'].includes(r.status?.toLowerCase())).length, color: 'text-rose-700 bg-rose-50/50 border-rose-100' }
+              { id: 'pending', label: 'Pending', count: recipients.filter(r => !['read', 'seen', 'delivered', 'sent', 'failed'].includes(r.status?.toLowerCase())).length, color: 'text-amber-700 bg-amber-50/50 border-amber-100' },
+              { id: 'failed', label: 'Failed', count: recipients.filter(r => r.status?.toLowerCase() === 'failed').length, color: 'text-rose-700 bg-rose-50/50 border-rose-100' }
             ].map((token) => (
               <button
                 key={token.id}
@@ -217,15 +225,21 @@ const CampaignDetails = () => {
                       </td>
 
                       {/* Performance Scores Column */}
-                      <td className="py-3 px-4 hidden sm:table-cell whitespace-nowrap">
-                        <div className="text-[10.5px] font-semibold text-slate-700 flex items-center gap-1.5">
-                          <span>Marks Secured:</span>
-                          <span className="bg-slate-50 px-2 py-0.5 border border-slate-200/50 rounded text-[#04432e] font-mono font-bold">
-                            {recipient.obtainedMarks}
-                          </span>
-                          <span className="text-slate-300">/</span>
-                          <span className="text-slate-400 font-mono">{recipient.totalMarks}</span>
-                        </div>
+                      <td className="py-3 px-4 hidden sm:table-cell">
+                        {recipient.rowData?.SubjectResults ? (
+                          <div className="text-[10.5px] font-semibold text-slate-700 max-w-[340px] whitespace-normal leading-snug">
+                            {recipient.rowData.SubjectResults}
+                          </div>
+                        ) : (recipient.obtainedMarks || recipient.totalMarks) ? (
+                          <div className="text-[10.5px] font-semibold text-slate-700 flex items-center gap-1.5 whitespace-nowrap">
+                            <span>Marks Secured:</span>
+                            <span className="bg-slate-50 px-2 py-0.5 border border-slate-200/50 rounded text-[#04432e] font-mono font-bold">
+                              {recipient.obtainedMarks}
+                            </span>
+                            <span className="text-slate-300">/</span>
+                            <span className="text-slate-400 font-mono">{recipient.totalMarks}</span>
+                          </div>
+                        ) : null}
                         {recipient.messageId?.body && (
                           <div className="text-[9.5px] text-slate-400 flex items-center gap-1 mt-1 max-w-[240px]">
                             <MessageCircle className="h-2.5 w-2.5 text-slate-300 shrink-0" />
@@ -247,6 +261,11 @@ const CampaignDetails = () => {
                             : "—"
                           }
                         </div>
+                        {recipient.status === 'failed' && (
+                          <div className="text-[9.5px] text-rose-600 mt-1 max-w-[260px] ml-auto whitespace-normal text-right leading-snug">
+                            {recipient.error || 'WhatsApp gave no reason.'}
+                          </div>
+                        )}
                       </td>
 
                     </tr>

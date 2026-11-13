@@ -52,11 +52,14 @@ export const initChatSocket = (dispatch) => {
     dispatch(chatApi.util.invalidateTags(["Conversations", "Messages"]));
   });
 
-  socket.on("message_status_update", ({ messageId, conversationId, status }) => {
+  socket.on("message_status_update", ({ messageId, conversationId, status, errorMessage }) => {
     dispatch(
       chatApi.util.updateQueryData("getConversationMessages", { id: conversationId }, (draft) => {
         const message = draft?.data?.find((m) => m._id === messageId);
-        if (message) message.status = status;
+        if (message) {
+          message.status = status;
+          if (errorMessage) message.errorMessage = errorMessage;
+        }
       }),
     );
     dispatch(chatApi.util.invalidateTags(["Conversations"]));
